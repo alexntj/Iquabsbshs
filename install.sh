@@ -160,15 +160,14 @@ echo -e "${CYAN}http://127.0.0.1:8080${NC}\n"
 echo -e "${YELLOW}Mantenha o Termux aberto em segundo plano.${NC}"
 echo -e "${YELLOW}Para desligar o painel, feche o Termux.${NC}\n"
 
-# Limpa processos antigos do Python
 pkill -f server.py 2>/dev/null
 
-# Cria o servidor direto na pasta HOME (sem erro de permissão)
 cat > ~/server.py << 'PY_EOF'
 import http.server
 import socketserver
 import subprocess
 import urllib.parse
+import threading
 
 PORT = 8080
 
@@ -245,18 +244,19 @@ HTML_PAGE = """<!DOCTYPE html>
         }
 
         function toggle(btn, endpoint) {
+            // Acende o botão na mesma hora
             const isActive = btn.classList.contains('active');
-            
             if (isActive) {
-                fetch('/off?item=' + endpoint).then(() => {
-                    btn.classList.remove('active');
-                    showToast('Desativado');
-                });
+                btn.classList.remove('active');
             } else {
-                fetch('/on?item=' + endpoint).then(() => {
-                    btn.classList.add('active');
-                    showToast('Ativado');
-                });
+                btn.classList.add('active');
+            }
+
+            // Manda o comando pro Python
+            if (isActive) {
+                fetch('/off?item=' + endpoint).then(() => { showToast('Desativado'); });
+            } else {
+                fetch('/on?item=' + endpoint).then(() => { showToast('Ativado'); });
             }
         }
 
@@ -272,6 +272,10 @@ HTML_PAGE = """<!DOCTYPE html>
 </body>
 </html>"""
 
+def send_cmd(cmd):
+    # Envia o comando sem travar o servidor
+    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -285,13 +289,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             
         elif parsed.path == '/on':
             item = query.get('item', [''])[0]
-            subprocess.run(['curl', '-s', '-H', 'Connection: close', '--max-time', '2', f'http://127.0.0.1:7755/{item}'])
+            send_cmd(['curl', '-s', '-H', 'Connection: close', '--max-time', '1', f'http://127.0.0.1:7755/{item}'])
             self.send_response(200)
             self.end_headers()
             
         elif parsed.path == '/off':
             item = query.get('item', [''])[0]
-            subprocess.run(['curl', '-s', '-H', 'Connection: close', '--max-time', '2', f'http://127.0.0.1:7755/{item}/desativar'])
+            send_cmd(['curl', '-s', '-H', 'Connection: close', '--max-time', '1', f'http://127.0.0.1:7755/{item}/desativar'])
             self.send_response(200)
             self.end_headers()
             
@@ -314,10 +318,7 @@ with socketserver.TCPServer(("", PORT), Handler) as httpd:
     httpd.serve_forever()
 PY_EOF
 
-# Abre o navegador automaticamente
 am start -a android.intent.action.VIEW -d http://127.0.0.1:8080 > /dev/null 2>&1
-
-# Roda o servidor
 python ~/server.py
 GHOST_EOF
 
