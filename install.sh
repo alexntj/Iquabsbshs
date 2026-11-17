@@ -160,11 +160,19 @@ echo -e "${CYAN}http://127.0.0.1:8080${NC}\n"
 echo -e "${YELLOW}Mantenha o Termux aberto em segundo plano.${NC}"
 echo -e "${YELLOW}Para desligar o painel, feche o Termux.${NC}\n"
 
-# Tenta abrir o navegador automaticamente
+# Abre o navegador automaticamente
 am start -a android.intent.action.VIEW -d http://127.0.0.1:8080 > /dev/null 2>&1
 
-cat > /data/data/com.termux/files/usr/share/ghost_panel.html << 'HTML_EOF'
-<!DOCTYPE html>
+# O servidor Python agora gera o HTML na memória (sem precisar de arquivo)
+cat > /data/data/com.termux/files/usr/share/server.py << 'PY_EOF'
+import http.server
+import socketserver
+import subprocess
+import urllib.parse
+
+PORT = 8080
+
+HTML_PAGE = """<!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
@@ -194,25 +202,25 @@ cat > /data/data/com.termux/files/usr/share/ghost_panel.html << 'HTML_EOF'
         <div class="card">
             <h2>AIMBOTS</h2>
             <div class="grid">
-                <button onclick="toggle(this, 'item1')">HS Cabeça</button>
+                <button onclick="toggle(this, 'item1')">HS Cabeca</button>
                 <button onclick="toggle(this, 'item5')">Drag Neck</button>
             </div>
         </div>
 
         <div class="card">
-            <h2>ESP (VISÃO)</h2>
+            <h2>ESP (VISAO)</h2>
             <div class="grid">
                 <button onclick="toggle(this, 'item3')">ESP Box</button>
                 <button onclick="toggle(this, 'item2')">ESP Linha</button>
                 <button onclick="toggle(this, 'item6')">ESP Nickname</button>
                 <button onclick="toggle(this, 'item7')">ESP Vida</button>
                 <button onclick="toggle(this, 'item9')">Esqueleto</button>
-                <button onclick="toggle(this, 'item10')">Distância</button>
+                <button onclick="toggle(this, 'item10')">Distancia</button>
             </div>
         </div>
 
         <div class="card">
-            <h2>OUTRAS FUNÇÕES</h2>
+            <h2>OUTRAS FUNCOES</h2>
             <div class="grid">
                 <button onclick="toggle(this, 'item11')">FOV Perfeito</button>
                 <button onclick="toggle(this, 'item14')">Fast Switch</button>
@@ -255,23 +263,14 @@ cat > /data/data/com.termux/files/usr/share/ghost_panel.html << 'HTML_EOF'
         function bypass(btn) {
             if(confirm("Isso vai desligar tudo e desinstalar o app Amazon. Continuar?")) {
                 fetch('/bypass').then(() => {
-                    showToast('Bypass concluído!');
+                    showToast('Bypass concluido!');
                     setTimeout(() => { window.close(); }, 2000);
                 });
             }
         }
     </script>
 </body>
-</html>
-HTML_EOF
-
-cat > /data/data/com.termux/files/usr/share/server.py << 'PY_EOF'
-import http.server
-import socketserver
-import subprocess
-import urllib.parse
-
-PORT = 8080
+</html>"""
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -279,8 +278,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed.query)
         
         if parsed.path == '/':
-            self.path = '/data/data/com.termux/files/usr/share/ghost_panel.html'
-            return http.server.SimpleHTTPRequestHandler.do_GET(self)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(HTML_PAGE.encode('utf-8'))
             
         elif parsed.path == '/on':
             item = query.get('item', [''])[0]
