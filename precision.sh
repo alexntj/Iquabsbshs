@@ -32,6 +32,16 @@ pausar() {
     sleep "${1:-1}"
 }
 
+ler_entrada() {
+    local prompt="$1"
+
+    if [[ -r /dev/tty ]]; then
+        read -r -p "$prompt" REPLY </dev/tty
+    else
+        read -r -p "$prompt" REPLY
+    fi
+}
+
 exigir_dependencias() {
     local ausentes=()
     command -v curl >/dev/null 2>&1 || ausentes+=("curl")
@@ -296,7 +306,8 @@ menu() {
         printf '         %s\n' "$APP_NAME"
         printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%b\n' "$RESET"
         printf '\n [1] Precisão\n [2] Assistência de Mira\n [3] Estabilizar Mira\n [4] Aumento de FPS\n [5] Dispositivo protegido\n [6] Sair\n\n'
-        read -r -p 'Escolha: ' opcao
+        ler_entrada 'Escolha: '
+        opcao="$REPLY"
 
         case "$opcao" in
             1) ativar 'Precisão' ;;
@@ -317,7 +328,8 @@ menu_principal() {
         printf '         %s\n' "$APP_NAME"
         printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%b\n\n' "$RESET"
         printf ' [1] Free Fire Max\n [2] Free Fire Normal\n [3] Sair\n\n'
-        read -r -p 'Escolha: ' opcao
+        ler_entrada 'Escolha: '
+        opcao="$REPLY"
 
         case "$opcao" in
             1|2)
@@ -341,8 +353,8 @@ menu_principal() {
 main() {
     exigir_dependencias
     intro
-    printf 'Digite a Key: '
-    read -r key
+    ler_entrada 'Digite a Key: '
+    key="$REPLY"
 
     if ! validar_key "$key"; then
         printf '%bAcesso bloqueado.%b\n' "$VERMELHO" "$RESET"
