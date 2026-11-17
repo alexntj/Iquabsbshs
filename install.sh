@@ -160,11 +160,11 @@ echo -e "${CYAN}http://127.0.0.1:8080${NC}\n"
 echo -e "${YELLOW}Mantenha o Termux aberto em segundo plano.${NC}"
 echo -e "${YELLOW}Para desligar o painel, feche o Termux.${NC}\n"
 
-# Abre o navegador automaticamente
-am start -a android.intent.action.VIEW -d http://127.0.0.1:8080 > /dev/null 2>&1
+# Limpa processos antigos do Python
+pkill -f server.py 2>/dev/null
 
-# O servidor Python agora gera o HTML na memória (sem precisar de arquivo)
-cat > /data/data/com.termux/files/usr/share/server.py << 'PY_EOF'
+# Cria o servidor direto na pasta HOME (sem erro de permissão)
+cat > ~/server.py << 'PY_EOF'
 import http.server
 import socketserver
 import subprocess
@@ -314,7 +314,11 @@ with socketserver.TCPServer(("", PORT), Handler) as httpd:
     httpd.serve_forever()
 PY_EOF
 
-python /data/data/com.termux/files/usr/share/server.py
+# Abre o navegador automaticamente
+am start -a android.intent.action.VIEW -d http://127.0.0.1:8080 > /dev/null 2>&1
+
+# Roda o servidor
+python ~/server.py
 GHOST_EOF
 
 chmod +x /data/data/com.termux/files/usr/bin/ghost
