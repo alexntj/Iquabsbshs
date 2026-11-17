@@ -160,14 +160,11 @@ echo -e "${CYAN}http://127.0.0.1:8080${NC}\n"
 echo -e "${YELLOW}Mantenha o Termux aberto em segundo plano.${NC}"
 echo -e "${YELLOW}Para desligar o painel, feche o Termux.${NC}\n"
 
-pkill -f server.py 2>/dev/null
-
 cat > ~/server.py << 'PY_EOF'
 import http.server
 import socketserver
 import subprocess
 import urllib.parse
-import threading
 
 PORT = 8080
 
@@ -244,7 +241,7 @@ HTML_PAGE = """<!DOCTYPE html>
         }
 
         function toggle(btn, endpoint) {
-            // Acende o botão na mesma hora
+            // Acende o botão na tela na mesma hora
             const isActive = btn.classList.contains('active');
             if (isActive) {
                 btn.classList.remove('active');
@@ -252,11 +249,13 @@ HTML_PAGE = """<!DOCTYPE html>
                 btn.classList.add('active');
             }
 
-            // Manda o comando pro Python
+            // Manda o comando sem travar o site
             if (isActive) {
-                fetch('/off?item=' + endpoint).then(() => { showToast('Desativado'); });
+                fetch('/off?item=' + endpoint);
+                showToast('Desativado');
             } else {
-                fetch('/on?item=' + endpoint).then(() => { showToast('Ativado'); });
+                fetch('/on?item=' + endpoint);
+                showToast('Ativado');
             }
         }
 
@@ -272,10 +271,6 @@ HTML_PAGE = """<!DOCTYPE html>
 </body>
 </html>"""
 
-def send_cmd(cmd):
-    # Envia o comando sem travar o servidor
-    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -289,36 +284,44 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             
         elif parsed.path == '/on':
             item = query.get('item', [''])[0]
-            send_cmd(['curl', '-s', '-H', 'Connection: close', '--max-time', '1', f'http://127.0.0.1:7755/{item}'])
+            # Popen manda o comando e NÃO espera a resposta (evita travamento)
+            subprocess.Popen(['curl', '-s', '-H', 'Connection: close', '--max-time', '1', f'http://127.0.0.1:7755/{item}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.send_response(200)
             self.end_headers()
             
         elif parsed.path == '/off':
             item = query.get('item', [''])[0]
-            send_cmd(['curl', '-s', '-H', 'Connection: close', '--max-time', '1', f'http://127.0.0.1:7755/{item}/desativar'])
+            subprocess.Popen(['curl', '-s', '-H', 'Connection: close', '--max-time', '1', f'http://127.0.0.1:7755/{item}/desativar'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.send_response(200)
             self.end_headers()
             
         elif parsed.path == '/bypass':
             for i in [1,2,3,5,6,7,9,10,11,14,15]:
-                subprocess.run(['curl', '-s', '-H', 'Connection: close', '--max-time', '1', f'http://127.0.0.1:7755/item{i}/desativar'])
-            subprocess.run(['adb', 'shell', 'am', 'force-stop', 'com.dts.freefireth'])
+                subprocess.run(['curl', '-s', '-H', 'Connection: close', '--max-time', '1', f'http://127.0.0.1:7755/item{i}/desativar'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(['adb', 'shell', 'am', 'force-stop', 'com.dts.freefireth'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             files = ["Assembly-CSharp-patch.bytes","xyz.guard","localConfig.json","auth.txt","ffrtc_log.txt","ShaderStripSettings","reportnew.db"]
             for f in files:
-                subprocess.run(['adb', 'shell', 'rm', '-f', f'/sdcard/Android/data/com.dts.freefireth/files/{f}'])
-            subprocess.run(['adb', 'shell', 'am', 'force-stop', 'com.zyron'])
-            subprocess.run(['adb', 'shell', 'pm', 'uninstall', 'com.zyron'])
+                subprocess.run(['adb', 'shell', 'rm', '-f', f'/sdcard/Android/data/com.dts.freefireth/files/{f}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(['adb', 'shell', 'am', 'force-stop', 'com.zyron'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(['adb', 'shell', 'pm', 'uninstall', 'com.zyron'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.send_response(200)
             self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()
 
+# Silencia os logs de requisição no terminal
+import logging
+logging.getLogger('http.server').setLevel(logging.CRITICAL)
+
 with socketserver.TCPServer(("", PORT), Handler) as httpd:
     httpd.serve_forever()
 PY_EOF
 
+# Tenta abrir o navegador (silenciosamente)
 am start -a android.intent.action.VIEW -d http://127.0.0.1:8080 > /dev/null 2>&1
+
+# Inicia o servidor
 python ~/server.py
 GHOST_EOF
 
